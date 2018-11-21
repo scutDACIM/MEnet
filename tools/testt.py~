@@ -1,0 +1,6 @@
+def hello(number):
+   print number + 1
+   return
+   
+    
+
