@@ -1,0 +1,172 @@
+import caffe
+import scipy.io as scio
+import os.path as osp
+import h5py
+import numpy as np
+import random
+#import read_binaryproto
+#import read_lmdb
+import matplotlib.pyplot as plt
+
+import global_var as GV
+'''
+this_dir = osp.dirname(__file__)
+data_path = osp.join(this_dir,'data')
+data_name = 'patches_1.mat'
+data = [data_path, data_name]
+data = h5py.File('/'.join(data))
+
+index = data.keys()
+labels = data[index[0]][0:2]
+samples = data[index[1]][:]
+
+yellolayer_dir = '/home/huangjb/mycaffe/data'
+data_name = 'patches_1.mat'
+data = [yellolayer_dir, data_name]
+data = h5py.File('/'.join(data))
+data_index = data.keys()
+data[data_index[1]].shape
+index_num = data_index.__len__()
+data_mean = np.zeros((index_num,3,64,64))
+data_mean[0] = np.sum(data[data_index[0]],axis=0)
+data_mean[1] = np.sum(data[data_index[1]],axis=0)
+print data_index[1]
+print data[data_index[0]].len()
+print data.keys().len
+'''
+
+class input_layer(caffe.Layer):
+    def setup(self, bottom, top):
+        params = eval(self.param_str)
+        self.data_dir = params['data_dir']
+        self.split = params['split']
+        self.train_batches = params['train_batches']
+        self.test_batches = params['test_batches']
+        self.train_data_name = params['train_data_name']
+        self.test_data_name = params['test_data_name']
+#        self.train_index = 0
+#        self.test_index = 0
+        self.crop_size = params['crop_size']
+        self.train_pack_nums = params['train_pack_nums']
+        self.test_pack_nums = params['test_pack_nums']
+
+        this_dir = osp.dirname(__file__)
+        self.data_path = osp.join(this_dir, '..',self.data_dir)
+#        self.get_data()
+        
+
+        
+    def reshape(self, bottom, top):
+        if self.split == 'train':
+            pack_index = np.random.random_integers(1, self.train_pack_nums)
+            h5file = h5py.File(self.data_path + self.train_data_name + str(pack_index) + '.h5', 'r')
+            self.read_data = h5file['train_data'][...]
+            self.read_labels = h5file['train_labels'][...]
+            self.dim_change_index = h5file['dim_change_index'][...]
+            self.read_data = np.array(self.read_data, dtype = np.float32)
+            self.read_labels = np.array(self.read_labels, dtype = np.float32)
+
+            self.data_cases, self.data_channels, self.data_height, self.data_width = self.read_data.shape 
+            rand_index = np.random.random_integers(0, self.data_cases - 1, size = self.train_batches)
+            rand_index.sort()
+
+            self.data = self.read_data[rand_index, :, :, :]
+            self.labels = self.read_labels[rand_index, :, :, :]
+
+
+            crops_x = np.random.random_integers(0, high = self.data_height - self.crop_size, size = self.train_batches)
+            crops_y = np.random.random_integers(0, high = self.data_width - self.crop_size, size = self.train_batches)
+            random_cropped_data = np.zeros((self.train_batches, self.data_channels, self.crop_size, self.crop_size), dtype = np.float32)
+            random_cropped_labels = np.zeros((self.train_batches, self.data_channels, self.crop_size, self.crop_size), dtype = np.float32)
+            
+            for i in range(self.train_batches):
+                tmp_data = self.data[i, :, crops_x[i] : (crops_x[i] + self.crop_size), crops_y[i] : (crops_y[i] + self.crop_size)]
+                tmp_labels = self.labels[i, :, crops_x[i] : (crops_x[i] + self.crop_size), crops_y[i] : (crops_y[i] + self.crop_size)]
+                if self.dim_change_index[i] == 1:
+                    tmp_data = tmp_data.transpose(0, 2, 1)
+                    tmp_labels = tmp_labels.transpose(0, 2, 1)
+                random_cropped_data[i, :, :, :] = tmp_data
+                random_cropped_labels[i, :, :, :] = tmp_labels
+            self.data = random_cropped_data
+            self.labels = random_cropped_labels[:, :, 4:-4, 4:-4]
+
+#            print pack_index1
+  
+                
+#            if self.train_index + self.train_batches <= self.data_cases:
+#                self.data = self.read_data[self.train_index : self.train_index + self.train_batches, :, :, :]
+#                self.labels = self.read_labels[self.train_index : self.train_index + self.train_batches]
+#                self.train_index  = self.train_index  + self.train_batches
+#            else:
+#                self.data = np.concatenate((self.read_data[self.train_index :, :, :, :], self.read_data[0 : self.train_batches + self.train_index - self.data_cases, :, :, :]), axis = 0)
+#                self.labels = np.concatenate((self.read_labels[self.train_index :], self.read_labels[0 : self.train_batches + self.train_index - self.data_cases]))
+#                self.train_index  = self.train_index + self.train_batches - self.data_cases
+                
+            
+        elif self.split == 'test':
+            pack_index = np.random.random_integers(1, self.test_pack_nums)
+            h5file = h5py.File(self.data_path + self.test_data_name + str(pack_index) + '.h5', 'r')
+            self.read_data = h5file['test_data'][...]
+            self.read_labels = h5file['test_labels'][...]
+            self.dim_change_index = h5file['dim_change_index'][...]
+            self.read_data = np.array(self.read_data, dtype = np.float32)
+            self.read_labels = np.array(self.read_labels, dtype = np.float32)
+            
+            self.data_cases, self.data_channels, self.data_height, self.data_width = self.read_data.shape 
+            rand_index = np.random.random_integers(0, self.data_cases - 1, size = self.test_batches)
+            rand_index.sort()
+            self.data = self.read_data[rand_index, :, :, :]
+            self.labels = self.read_labels[rand_index, :, :, :]
+            
+            crops_x = np.random.random_integers(0, high = self.data_height - self.crop_size, size = self.test_batches)
+            crops_y = np.random.random_integers(0, high = self.data_width - self.crop_size, size = self.test_batches)
+            random_cropped_data = np.zeros((self.test_batches, self.data_channels, self.crop_size, self.crop_size), dtype = np.float32)
+            random_cropped_labels = np.zeros((self.test_batches, self.data_channels, self.crop_size, self.crop_size), dtype = np.float32)
+            
+            for i in range(self.test_batches):
+                tmp_data = self.data[i, :, crops_x[i] : (crops_x[i] + self.crop_size), crops_y[i] : (crops_y[i] + self.crop_size)]
+                tmp_labels = self.labels[i, :, crops_x[i] : (crops_x[i] + self.crop_size), crops_y[i] : (crops_y[i] + self.crop_size)]
+                if self.dim_change_index[i] == 1:
+                    tmp_data = tmp_data.transpose(0, 2, 1)
+                    tmp_labels = tmp_labels.transpose(0, 2, 1)
+                random_cropped_data[i, :, :, :] = tmp_data
+                random_cropped_labels[i, :, :, :] = tmp_labels
+            self.data = random_cropped_data
+            self.labels = random_cropped_labels[:, :, 4:-4, 4:-4]
+            
+        top[0].reshape(*self.data.shape)
+        top[1].reshape(*self.labels.shape)
+        
+        
+    def forward(self, bottom, top):
+        top[0].data[...] = self.data
+        top[1].data[...] = self.labels
+        
+    def backward(self, bottom, top):
+        pass
+    
+    def get_data(self):
+
+        if self.split == 'test':
+            h5file = h5py.File(self.data_path + self.test_data_name, 'r')
+            self.read_data = h5file['test_data'][...]
+            self.read_labels = h5file['test_labels'][...]
+            self.dim_change_index = h5file['dim_change_index'][...]
+            self.read_data = np.array(self.read_data, dtype = np.float32)
+            self.read_labels = np.array(self.read_labels, dtype = np.float32)
+            self.data_cases, self.data_channels, self.data_height, self.data_width  = self.read_data.shape
+            
+#            self.batch_times = self.data_cases / self.test_batch
+#            self.read_data = np.pad(self.read_data, pad_width = ((0,0),(0,0),(4, 4),(4, 4)), mode = 'constant', constant_values = 0)
+#            self.read_data = self.read_data / 128.0
+            '''
+            self.read_data_path = osp.join(self.data_path, self.test_data_name)
+            self.read_data, self.read_labels = read_lmdb.read_lmdb(self.read_data_path)
+#            self.read_data = self.read_data - self.mean_value
+            h5file = h5py.File(self.data_path +'test_data.h5', 'w')
+            h5file.create_dataset('test_data', data = self.read_data, dtype = np.int8)
+            h5file.create_dataset('test_labels', data = self.read_labels, dtype = np.uint8)
+            h5file.close()
+            '''
+#            for i in solver.test_nets[0].blobs.keys():
+#                print i, solver.test_nets[0].blobs[i].data.shape
